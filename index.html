@@ -87,7 +87,7 @@ h1 {
     margin-top: 10px;
 }
 
-/* Highlights (debit + rendement mis en avant) */
+/* Highlights (sel + rendement mis en avant) */
 .highlights-grille {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -124,6 +124,16 @@ h1 {
     color: #ffd700;
     text-shadow: 0 0 15px rgba(255,215,0,0.6);
 }
+
+/* Variantes de couleur pour le highlight SEL (dynamique selon seuils) */
+.highlight-box.sel-ok { border-color: #4caf50; }
+.highlight-box.sel-ok .highlight-valeur { color: #4caf50; text-shadow: 0 0 15px rgba(76,175,80,0.6); }
+
+.highlight-box.sel-warn { border-color: #ff9800; }
+.highlight-box.sel-warn .highlight-valeur { color: #ff9800; text-shadow: 0 0 15px rgba(255,152,0,0.6); }
+
+.highlight-box.sel-alerte { border-color: #f44336; }
+.highlight-box.sel-alerte .highlight-valeur { color: #f44336; text-shadow: 0 0 15px rgba(244,67,54,0.6); }
 
 /* Grille de statistiques secondaires */
 .stats-container {
@@ -346,14 +356,14 @@ canvas {
         <div class="etat-box">
             <div class="etat-label">Etat actuel</div>
             <div class="etat-valeur" id="etatActuel">--</div>
-            <div class="etat-sous">Sel : <span id="selPourcent">--</span>% (<span id="distanceMm">--</span> mm)</div>
+            <div class="etat-sous">Distance capteur : <span id="distanceMm">--</span> mm</div>
             <div class="etat-sous">Derniere regeneration : <span id="lastRegen">--</span></div>
 
-            <!-- MISE EN AVANT : Debit instantane + Rendement -->
+            <!-- MISE EN AVANT : Sel restant + Rendement -->
             <div class="highlights-grille">
-                <div class="highlight-box">
-                    <div class="highlight-label">💧 Debit instantane</div>
-                    <div class="highlight-valeur"><span id="debitInstant">--</span> L/min</div>
+                <div class="highlight-box" id="selHighlightBox">
+                    <div class="highlight-label">🧂 Sel restant</div>
+                    <div class="highlight-valeur"><span id="selPourcentHighlight">--</span> %</div>
                 </div>
                 <div class="highlight-box rendement">
                     <div class="highlight-label">⚙ Rendement adoucisseur</div>
@@ -435,6 +445,13 @@ canvas {
 <script>
 
 // ============================================================================
+// SEUILS COULEUR SEL (coherents avec le widget iPhone)
+// ============================================================================
+
+const SEUIL_ORANGE_SEL = 10;
+const SEUIL_ROUGE_SEL = 1;
+
+// ============================================================================
 // STATUT ADOUCISSEUR
 // ============================================================================
 
@@ -444,19 +461,34 @@ async function loadStatut() {
         const s = await res.json();
 
         document.getElementById("etatActuel").textContent = s.etat || "--";
-        document.getElementById("selPourcent").textContent = s.sel_pourcentage;
         document.getElementById("distanceMm").textContent = s.distance_mm;
         document.getElementById("lastRegen").textContent = s.last_regen_date || "--";
         document.getElementById("derniereMaj").textContent = s.derniere_maj || "--";
         document.getElementById("derniereActualisation").textContent = s.derniere_maj || "--";
 
-        document.getElementById("debitInstant").textContent = (s.debit_instantane_lmin !== undefined && s.debit_instantane_lmin !== null ? s.debit_instantane_lmin.toFixed(2) : "--");
+        // ====== HIGHLIGHT SEL (avec couleur dynamique) ======
+        document.getElementById("selPourcentHighlight").textContent = (s.sel_pourcentage !== undefined && s.sel_pourcentage !== null) ? s.sel_pourcentage : "--";
+
+        const selBox = document.getElementById("selHighlightBox");
+        selBox.classList.remove("sel-ok", "sel-warn", "sel-alerte");
+
+        if (s.capteur_sel_hs || s.anomalie_conso_eau_active || s.etat === "ANOMALIE" || s.sel_pourcentage <= SEUIL_ROUGE_SEL) {
+            selBox.classList.add("sel-alerte");
+        } else if (s.sel_pourcentage <= SEUIL_ORANGE_SEL) {
+            selBox.classList.add("sel-warn");
+        } else {
+            selBox.classList.add("sel-ok");
+        }
+
+        // ====== HIGHLIGHT RENDEMENT ======
         document.getElementById("rendementValeur").textContent = s.rendement_pourcent.toFixed(1);
 
+        // ====== STATS SECONDAIRES (dont debit, desormais ici) ======
         const grille = document.getElementById("statsGrille");
         grille.innerHTML = "";
 
         const stats = [
+            { label: "Debit instantane", valeur: (s.debit_instantane_lmin !== undefined && s.debit_instantane_lmin !== null ? s.debit_instantane_lmin.toFixed(2) + " L/min" : "N/A"), classe: "info" },
             { label: "Autonomie estimee", valeur: (s.autonomie_jours_estimee >= 0 ? s.autonomie_jours_estimee.toFixed(1) + " j" : "N/A"), classe: "info" },
             { label: "Ratio L/kg sel", valeur: s.ratio_litres_par_kg_sel.toFixed(1), classe: "info" },
             { label: "Capteur sel", valeur: s.capteur_sel_hs ? "DEFAILLANT" : "OK", classe: s.capteur_sel_hs ? "alerte" : "ok" },
