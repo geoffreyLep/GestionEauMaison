@@ -331,7 +331,7 @@ canvas {
 
 <h1>🧂💧 Gestion Eau Maison</h1>
 <div class="utc-info">
-    Derniere actualisation : <span id="heureLocale"></span>
+    Donnees a jour au : <span id="derniereActualisation">--</span>
 </div>
 
 <div class="container">
@@ -435,17 +435,6 @@ canvas {
 <script>
 
 // ============================================================================
-// HORLOGE LOCALE
-// ============================================================================
-
-function updateHeureLocale() {
-    const now = new Date();
-    document.getElementById("heureLocale").textContent = now.toLocaleString('fr-FR');
-}
-updateHeureLocale();
-setInterval(updateHeureLocale, 1000);
-
-// ============================================================================
 // STATUT ADOUCISSEUR
 // ============================================================================
 
@@ -459,8 +448,9 @@ async function loadStatut() {
         document.getElementById("distanceMm").textContent = s.distance_mm;
         document.getElementById("lastRegen").textContent = s.last_regen_date || "--";
         document.getElementById("derniereMaj").textContent = s.derniere_maj || "--";
+        document.getElementById("derniereActualisation").textContent = s.derniere_maj || "--";
 
-        document.getElementById("debitInstant").textContent = (s.debit_instantane_lmin !== undefined ? s.debit_instantane_lmin.toFixed(2) : "--");
+        document.getElementById("debitInstant").textContent = (s.debit_instantane_lmin !== undefined && s.debit_instantane_lmin !== null ? s.debit_instantane_lmin.toFixed(2) : "--");
         document.getElementById("rendementValeur").textContent = s.rendement_pourcent.toFixed(1);
 
         const grille = document.getElementById("statsGrille");
@@ -749,7 +739,8 @@ loadGraphiqueMois();
 loadGraphiqueAnnee();
 loadRegenerations();
 
-// Refresh toutes les 15 minutes
+// Refresh toutes les 15 minutes (rafraichit l'affichage cote navigateur,
+// meme si les donnees sources ne changent qu'1x/jour cote NAS)
 setInterval(() => {
     loadStatut();
     loadConfig();
