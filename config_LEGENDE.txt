@@ -1,0 +1,45 @@
+LEGENDE DU FICHIER config.json - PROJET ADOUCISSEUR
+=====================================================
+
+eauActif
+  -> true/false : indique si le comptage d'eau (reed switch) est actif
+  -> Se configure sur adoucisseur.local/config, case "Compteur eau actif"
+
+eauOffsetLitres
+  -> Valeur en litres ajoutee au compteur total pour caler avec le compteur d'eau officiel
+  -> Utile pour la calibration initiale
+
+distPleinMM
+  -> Distance mesuree par le capteur VL53L0X quand le bac a sel est PLEIN (= 100%)
+  -> Valeur par defaut: 80mm
+
+distVideMM
+  -> Distance mesuree quand le bac a sel est VIDE (= 0%)
+  -> C'est cette valeur qui declenche le SMS d'alerte "plus de sel"
+  -> Valeur par defaut: 650mm
+
+distanceMaxPlausibleMM
+  -> Au-dela de cette distance, la lecture est consideree comme une erreur capteur
+  -> Declenche la procedure d'auto-recuperation du VL53L0X
+  -> Valeur par defaut: 1000mm
+
+seuilAlarmePourcent
+  -> Seuil de % de sel en dessous duquel une alerte est consideree active
+  -> Actuellement 0% (le SMS part quand le sel atteint 0%)
+
+capaciteSelKg
+  -> Capacite totale du bac a sel en kg
+  -> Utilisee pour calculer le ratio litres d'eau / kg de sel consomme
+
+seuilAnomalieEauLitres
+  -> Volume d'eau (en litres) au-dela duquel, sur la fenetre de temps definie
+     ci-dessous, on considere qu'il y a une anomalie (fuite, robinet ouvert...)
+
+fenetreAnomalieEauMinutes
+  -> Duree de la fenetre de surveillance pour la detection d'anomalie eau (en minutes)
+  -> Exemple: 200L en 60 minutes = anomalie
+
+multiplicateurAnomalieRegen
+  -> Si une regeneration dure plus que (duree moyenne x ce multiplicateur),
+     c'est signale comme une anomalie de duree de regeneration
+  -> Valeur par defaut: 1.5 (donc alerte si regen dure 50% plus longtemps que la moyenne)

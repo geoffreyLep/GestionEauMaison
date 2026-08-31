@@ -1,0 +1,765 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Gestion Eau Maison</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 100%);
+    color: #eee;
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+    font-size: 2.5em;
+    margin-bottom: 10px;
+    color: #00d4ff;
+    text-shadow: 0 0 20px rgba(0,212,255,0.5);
+}
+
+.utc-info {
+    text-align: center;
+    font-size: 0.9em;
+    color: #aaa;
+    margin-bottom: 30px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* ============================================
+   CADRE STATUT ADOUCISSEUR (en haut)
+   ============================================ */
+
+.statut-cadre {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 3px solid #0f3460;
+    border-radius: 20px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.statut-titre {
+    font-size: 2em;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 25px;
+    color: #00d4ff;
+    text-shadow: 0 0 15px rgba(0,212,255,0.6);
+}
+
+.etat-box {
+    background: linear-gradient(135deg, #0a192f 0%, #0f2536 100%);
+    border: 3px solid #64ffda;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.etat-label {
+    font-size: 1.1em;
+    color: #aaa;
+    margin-bottom: 10px;
+}
+
+.etat-valeur {
+    font-size: 3em;
+    font-weight: bold;
+    color: #64ffda;
+    text-shadow: 0 0 20px rgba(100,255,218,0.8);
+    margin: 10px 0;
+}
+
+.etat-sous {
+    font-size: 1.1em;
+    color: #aaa;
+    margin-top: 10px;
+}
+
+/* Highlights (debit + rendement mis en avant) */
+.highlights-grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 25px;
+}
+
+.highlight-box {
+    background: rgba(0,0,0,0.25);
+    border: 2px solid #00d4ff;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.highlight-label {
+    font-size: 0.9em;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.highlight-valeur {
+    font-size: 2.2em;
+    font-weight: bold;
+    color: #00d4ff;
+    text-shadow: 0 0 15px rgba(0,212,255,0.6);
+}
+
+.highlight-box.rendement {
+    border-color: #ffd700;
+}
+.highlight-box.rendement .highlight-valeur {
+    color: #ffd700;
+    text-shadow: 0 0 15px rgba(255,215,0,0.6);
+}
+
+/* Grille de statistiques secondaires */
+.stats-container {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 2px solid rgba(100,255,218,0.3);
+}
+
+.stats-titre {
+    font-size: 1em;
+    color: #aaa;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stats-grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+}
+
+.stat-item {
+    background: rgba(255,255,255,0.05);
+    border-radius: 10px;
+    padding: 15px 10px;
+    border: 2px solid;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-align: center;
+}
+
+.stat-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.stat-item.ok { border-color: #4caf50; background: linear-gradient(135deg, rgba(76,175,80,0.1), rgba(76,175,80,0.05)); }
+.stat-item.info { border-color: #00d4ff; background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,212,255,0.05)); }
+.stat-item.warn { border-color: #ff9800; background: linear-gradient(135deg, rgba(255,152,0,0.1), rgba(255,152,0,0.05)); }
+.stat-item.alerte { border-color: #f44336; background: linear-gradient(135deg, rgba(244,67,54,0.1), rgba(244,67,54,0.05)); }
+
+.stat-label {
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #aaa;
+}
+
+.stat-valeur {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #fff;
+}
+
+.derniere-maj {
+    text-align: center;
+    font-size: 0.9em;
+    color: #888;
+    margin-top: 25px;
+    font-style: italic;
+}
+
+/* ============================================
+   CADRE CONFIGURATION
+   ============================================ */
+
+.config-cadre {
+    background: rgba(26,26,46,0.8);
+    border: 2px solid #0f3460;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 50px;
+}
+
+.config-titre {
+    font-size: 1.4em;
+    margin-bottom: 20px;
+    color: #64ffda;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.config-info {
+    font-size: 0.75em;
+    color: #888;
+    font-weight: normal;
+    font-style: italic;
+}
+
+.config-grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.config-item {
+    background: rgba(255,255,255,0.04);
+    border-left: 3px solid #64ffda;
+    border-radius: 6px;
+    padding: 10px 15px;
+}
+
+.config-label {
+    font-size: 0.75em;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.config-valeur {
+    font-size: 1.2em;
+    color: #eee;
+    font-weight: bold;
+    margin-top: 3px;
+}
+
+/* ============================================
+   GRAPHIQUES (en bas)
+   ============================================ */
+
+.graphiques-section {
+    margin-top: 50px;
+}
+
+.graphiques-titre {
+    font-size: 2em;
+    text-align: center;
+    margin-bottom: 30px;
+    color: #00d4ff;
+    text-shadow: 0 0 15px rgba(0,212,255,0.6);
+}
+
+.chart-box {
+    background: rgba(26,26,46,0.8);
+    border: 2px solid #0f3460;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.chart-titre {
+    font-size: 1.3em;
+    margin-bottom: 15px;
+    color: #64ffda;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chart-titre select {
+    background: #0a192f;
+    color: #64ffda;
+    border: 2px solid #64ffda;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.7em;
+    cursor: pointer;
+}
+
+canvas {
+    max-width: 100%;
+    height: 300px !important;
+}
+
+/* Tableau régénérations */
+.table-regen {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.table-regen th {
+    text-align: left;
+    padding: 10px;
+    color: #00d4ff;
+    border-bottom: 2px solid #0f3460;
+    font-size: 0.85em;
+    text-transform: uppercase;
+}
+
+.table-regen td {
+    padding: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-size: 0.95em;
+}
+
+.table-regen tr:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    h1 { font-size: 1.8em; }
+    .statut-titre { font-size: 1.5em; }
+    .etat-valeur { font-size: 2.2em; }
+    .stats-grille { grid-template-columns: repeat(2, 1fr); }
+    .config-grille { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<h1>🧂💧 Gestion Eau Maison</h1>
+<div class="utc-info">
+    Derniere actualisation : <span id="heureLocale"></span>
+</div>
+
+<div class="container">
+
+    <!-- ============================================
+         SECTION STATUT ADOUCISSEUR (EN HAUT)
+         ============================================ -->
+
+    <div class="statut-cadre">
+        <div class="statut-titre">🧂 ADOUCISSEUR</div>
+
+        <div class="etat-box">
+            <div class="etat-label">Etat actuel</div>
+            <div class="etat-valeur" id="etatActuel">--</div>
+            <div class="etat-sous">Sel : <span id="selPourcent">--</span>% (<span id="distanceMm">--</span> mm)</div>
+            <div class="etat-sous">Derniere regeneration : <span id="lastRegen">--</span></div>
+
+            <!-- MISE EN AVANT : Debit instantane + Rendement -->
+            <div class="highlights-grille">
+                <div class="highlight-box">
+                    <div class="highlight-label">💧 Debit instantane</div>
+                    <div class="highlight-valeur"><span id="debitInstant">--</span> L/min</div>
+                </div>
+                <div class="highlight-box rendement">
+                    <div class="highlight-label">⚙ Rendement adoucisseur</div>
+                    <div class="highlight-valeur"><span id="rendementValeur">--</span> %</div>
+                </div>
+            </div>
+
+            <div class="stats-container">
+                <div class="stats-titre">📊 Autres indicateurs</div>
+                <div class="stats-grille" id="statsGrille">
+                    <!-- Rempli dynamiquement -->
+                </div>
+            </div>
+        </div>
+
+        <div class="derniere-maj">
+            Donnees recuperees le : <span id="derniereMaj">--</span>
+        </div>
+    </div>
+
+    <!-- ============================================
+         SECTION CONFIGURATION (lecture seule)
+         ============================================ -->
+
+    <div class="config-cadre">
+        <div class="config-titre">
+            ⚙ Configuration actuelle
+            <span class="config-info">Modifiable uniquement depuis adoucisseur.local/config</span>
+        </div>
+        <div class="config-grille" id="configGrille">
+            <!-- Rempli dynamiquement -->
+        </div>
+    </div>
+
+    <!-- ============================================
+         SECTION GRAPHIQUES EAU
+         ============================================ -->
+
+    <div class="graphiques-section">
+        <div class="graphiques-titre">💧 CONSOMMATION D'EAU</div>
+
+        <div class="chart-box">
+            <div class="chart-titre">Consommation - 7 derniers jours (resolution 5 min)</div>
+            <canvas id="chartSemaine"></canvas>
+        </div>
+
+        <div class="chart-box">
+            <div class="chart-titre">Consommation - dernier mois (resolution horaire)</div>
+            <canvas id="chartMois"></canvas>
+        </div>
+
+        <div class="chart-box">
+            <div class="chart-titre">
+                <span>Consommation mensuelle par annee</span>
+                <select id="selecteurAnnee" onchange="loadGraphiqueAnnee()"></select>
+            </div>
+            <canvas id="chartAnnee"></canvas>
+        </div>
+
+        <div class="chart-box">
+            <div class="chart-titre">10 dernieres regenerations</div>
+            <canvas id="chartRegen"></canvas>
+            <table class="table-regen" id="tableRegen">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Duree</th>
+                        <th>Eau consommee</th>
+                    </tr>
+                </thead>
+                <tbody id="tableRegenBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+
+// ============================================================================
+// HORLOGE LOCALE
+// ============================================================================
+
+function updateHeureLocale() {
+    const now = new Date();
+    document.getElementById("heureLocale").textContent = now.toLocaleString('fr-FR');
+}
+updateHeureLocale();
+setInterval(updateHeureLocale, 1000);
+
+// ============================================================================
+// STATUT ADOUCISSEUR
+// ============================================================================
+
+async function loadStatut() {
+    try {
+        const res = await fetch("statut.json?" + Date.now());
+        const s = await res.json();
+
+        document.getElementById("etatActuel").textContent = s.etat || "--";
+        document.getElementById("selPourcent").textContent = s.sel_pourcentage;
+        document.getElementById("distanceMm").textContent = s.distance_mm;
+        document.getElementById("lastRegen").textContent = s.last_regen_date || "--";
+        document.getElementById("derniereMaj").textContent = s.derniere_maj || "--";
+
+        document.getElementById("debitInstant").textContent = (s.debit_instantane_lmin !== undefined ? s.debit_instantane_lmin.toFixed(2) : "--");
+        document.getElementById("rendementValeur").textContent = s.rendement_pourcent.toFixed(1);
+
+        const grille = document.getElementById("statsGrille");
+        grille.innerHTML = "";
+
+        const stats = [
+            { label: "Autonomie estimee", valeur: (s.autonomie_jours_estimee >= 0 ? s.autonomie_jours_estimee.toFixed(1) + " j" : "N/A"), classe: "info" },
+            { label: "Ratio L/kg sel", valeur: s.ratio_litres_par_kg_sel.toFixed(1), classe: "info" },
+            { label: "Capteur sel", valeur: s.capteur_sel_hs ? "DEFAILLANT" : "OK", classe: s.capteur_sel_hs ? "alerte" : "ok" },
+            { label: "Anomalie conso eau", valeur: s.anomalie_conso_eau_active ? "OUI" : "NON", classe: s.anomalie_conso_eau_active ? "alerte" : "ok" },
+            { label: "Watchdog", valeur: s.watchdog_ok ? "OK" : "PROBLEME", classe: s.watchdog_ok ? "ok" : "alerte" }
+        ];
+
+        stats.forEach(st => {
+            const item = document.createElement("div");
+            item.className = `stat-item ${st.classe}`;
+            item.innerHTML = `
+                <div class="stat-label">${st.label}</div>
+                <div class="stat-valeur">${st.valeur}</div>
+            `;
+            grille.appendChild(item);
+        });
+
+    } catch(e) {
+        console.error("Erreur chargement statut:", e);
+    }
+}
+
+// ============================================================================
+// CONFIGURATION (lecture seule)
+// ============================================================================
+
+async function loadConfig() {
+    try {
+        const res = await fetch("config.json?" + Date.now());
+        const c = await res.json();
+
+        const grille = document.getElementById("configGrille");
+        grille.innerHTML = "";
+
+        const items = [
+            { label: "Distance sel PLEIN", valeur: c.distPleinMM + " mm" },
+            { label: "Distance sel VIDE", valeur: c.distVideMM + " mm" },
+            { label: "Distance max plausible", valeur: c.distanceMaxPlausibleMM + " mm" },
+            { label: "Seuil alarme sel", valeur: c.seuilAlarmePourcent + " %" },
+            { label: "Capacite bac a sel", valeur: c.capaciteSelKg + " kg" },
+            { label: "Seuil anomalie eau", valeur: c.seuilAnomalieEauLitres + " L" },
+            { label: "Fenetre anomalie eau", valeur: c.fenetreAnomalieEauMinutes + " min" },
+            { label: "Multiplicateur anomalie regen", valeur: "x" + c.multiplicateurAnomalieRegen },
+            { label: "Compteur eau actif", valeur: c.eauActif ? "OUI" : "NON" },
+            { label: "Offset compteur eau", valeur: c.eauOffsetLitres + " L" }
+        ];
+
+        items.forEach(it => {
+            const item = document.createElement("div");
+            item.className = "config-item";
+            item.innerHTML = `
+                <div class="config-label">${it.label}</div>
+                <div class="config-valeur">${it.valeur}</div>
+            `;
+            grille.appendChild(item);
+        });
+
+    } catch(e) {
+        console.error("Erreur chargement config:", e);
+    }
+}
+
+// ============================================================================
+// GRAPHIQUE SEMAINE (5 min)
+// ============================================================================
+
+let chartSemaine, chartMois, chartAnnee, chartRegen;
+
+async function loadGraphiqueSemaine() {
+    try {
+        const res = await fetch("eau_semaine.json?" + Date.now());
+        const data = await res.json();
+
+        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {weekday:'short', hour:'2-digit', minute:'2-digit'}));
+        const valeurs = data.map(d => d.litres);
+
+        if (!chartSemaine) {
+            const ctx = document.getElementById('chartSemaine').getContext('2d');
+            chartSemaine = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Litres',
+                        data: valeurs,
+                        borderColor: '#64ffda',
+                        backgroundColor: 'rgba(100,255,218,0.2)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }]
+                },
+                options: chartOptionsDefaut()
+            });
+        } else {
+            chartSemaine.data.labels = labels;
+            chartSemaine.data.datasets[0].data = valeurs;
+            chartSemaine.update();
+        }
+    } catch(e) {
+        console.error("Erreur chargement graphique semaine:", e);
+    }
+}
+
+// ============================================================================
+// GRAPHIQUE MOIS (horaire)
+// ============================================================================
+
+async function loadGraphiqueMois() {
+    try {
+        const res = await fetch("eau_mois.json?" + Date.now());
+        const data = await res.json();
+
+        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit'}));
+        const valeurs = data.map(d => d.litres);
+
+        if (!chartMois) {
+            const ctx = document.getElementById('chartMois').getContext('2d');
+            chartMois = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Litres',
+                        data: valeurs,
+                        borderColor: '#00d4ff',
+                        backgroundColor: 'rgba(0,212,255,0.2)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }]
+                },
+                options: chartOptionsDefaut()
+            });
+        } else {
+            chartMois.data.labels = labels;
+            chartMois.data.datasets[0].data = valeurs;
+            chartMois.update();
+        }
+    } catch(e) {
+        console.error("Erreur chargement graphique mois:", e);
+    }
+}
+
+// ============================================================================
+// GRAPHIQUE ANNEE (avec selecteur)
+// ============================================================================
+
+let donneesAnnees = null;
+
+async function loadGraphiqueAnnee() {
+    try {
+        if (!donneesAnnees) {
+            const res = await fetch("eau_annees.json?" + Date.now());
+            donneesAnnees = await res.json();
+
+            const select = document.getElementById("selecteurAnnee");
+            select.innerHTML = "";
+            Object.keys(donneesAnnees).sort().reverse().forEach(annee => {
+                const option = document.createElement("option");
+                option.value = annee;
+                option.textContent = annee;
+                select.appendChild(option);
+            });
+        }
+
+        const anneeChoisie = document.getElementById("selecteurAnnee").value;
+        const donneesAnnee = donneesAnnees[anneeChoisie] || [];
+
+        const labels = donneesAnnee.map(d => d.mois);
+        const valeurs = donneesAnnee.map(d => d.litres);
+
+        if (!chartAnnee) {
+            const ctx = document.getElementById('chartAnnee').getContext('2d');
+            chartAnnee = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Litres consommes',
+                        data: valeurs,
+                        backgroundColor: 'rgba(100,255,218,0.6)',
+                        borderColor: 'rgba(100,255,218,1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: chartOptionsDefaut()
+            });
+        } else {
+            chartAnnee.data.labels = labels;
+            chartAnnee.data.datasets[0].data = valeurs;
+            chartAnnee.update();
+        }
+    } catch(e) {
+        console.error("Erreur chargement graphique annee:", e);
+    }
+}
+
+// ============================================================================
+// GRAPHIQUE + TABLEAU REGENERATIONS
+// ============================================================================
+
+async function loadRegenerations() {
+    try {
+        const res = await fetch("regenerations.json?" + Date.now());
+        const data = await res.json();
+
+        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleDateString('fr-FR'));
+        const valeurs = data.map(d => d.litres_consommes);
+
+        if (!chartRegen) {
+            const ctx = document.getElementById('chartRegen').getContext('2d');
+            chartRegen = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Litres consommes pendant la regen',
+                        data: valeurs,
+                        backgroundColor: 'rgba(255,165,0,0.7)',
+                        borderColor: 'rgba(255,165,0,1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: chartOptionsDefaut()
+            });
+        } else {
+            chartRegen.data.labels = labels;
+            chartRegen.data.datasets[0].data = valeurs;
+            chartRegen.update();
+        }
+
+        const tbody = document.getElementById("tableRegenBody");
+        tbody.innerHTML = "";
+        data.slice().reverse().forEach(r => {
+            const tr = document.createElement("tr");
+            const dateStr = new Date(r.timestamp * 1000).toLocaleString('fr-FR');
+            const dureeStr = Math.round(r.duree_secondes / 60) + " min";
+            tr.innerHTML = `
+                <td>${dateStr}</td>
+                <td>${dureeStr}</td>
+                <td>${r.litres_consommes} L</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+    } catch(e) {
+        console.error("Erreur chargement regenerations:", e);
+    }
+}
+
+// ============================================================================
+// OPTIONS GRAPHIQUES PAR DEFAUT (style commun)
+// ============================================================================
+
+function chartOptionsDefaut() {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { labels: { color: '#eee' } }
+        },
+        scales: {
+            x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+            y: { beginAtZero: true, ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+        }
+    };
+}
+
+// ============================================================================
+// INITIALISATION ET REFRESH AUTO
+// ============================================================================
+
+loadStatut();
+loadConfig();
+loadGraphiqueSemaine();
+loadGraphiqueMois();
+loadGraphiqueAnnee();
+loadRegenerations();
+
+// Refresh toutes les 15 minutes
+setInterval(() => {
+    loadStatut();
+    loadConfig();
+    loadGraphiqueSemaine();
+    loadGraphiqueMois();
+    loadGraphiqueAnnee();
+    loadRegenerations();
+}, 15 * 60 * 1000);
+
+</script>
+
+</body>
+</html>
