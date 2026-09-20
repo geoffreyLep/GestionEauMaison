@@ -24,6 +24,15 @@ h1 {
     text-shadow: 0 0 20px rgba(0,212,255,0.5);
 }
 
+h1 .signature {
+    font-size: 0.35em;
+    font-weight: normal;
+    color: #888;
+    text-shadow: none;
+    vertical-align: middle;
+    margin-left: 10px;
+}
+
 .utc-info {
     text-align: center;
     font-size: 0.9em;
@@ -115,6 +124,8 @@ h1 {
 .config-cadre { background: rgba(26,26,46,0.8); border: 2px solid #0f3460; border-radius: 15px; padding: 25px; margin-bottom: 50px; }
 .config-titre { font-size: 1.4em; margin-bottom: 20px; color: #64ffda; display: flex; justify-content: space-between; align-items: center; }
 .config-info { font-size: 0.75em; color: #888; font-weight: normal; font-style: italic; }
+.config-info a { color: #64ffda; text-decoration: underline; }
+.config-info a:hover { color: #00d4ff; }
 .config-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .config-item { background: rgba(255,255,255,0.04); border-left: 3px solid #64ffda; border-radius: 6px; padding: 10px 15px; }
 .config-label { font-size: 0.75em; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -173,6 +184,7 @@ h1 {
 .chart-titre { font-size: 1.3em; margin-bottom: 15px; color: #64ffda; display: flex; justify-content: space-between; align-items: center; }
 .chart-titre select { background: #0a192f; color: #64ffda; border: 2px solid #64ffda; border-radius: 8px; padding: 6px 12px; font-size: 0.7em; cursor: pointer; }
 canvas { max-width: 100%; height: 300px !important; }
+#chartRegen { height: 450px !important; }
 
 .table-regen { width: 100%; border-collapse: collapse; margin-top: 15px; }
 .table-regen th { text-align: left; padding: 10px; color: #00d4ff; border-bottom: 2px solid #0f3460; font-size: 0.85em; text-transform: uppercase; }
@@ -191,7 +203,7 @@ canvas { max-width: 100%; height: 300px !important; }
 </head>
 <body>
 
-<h1>🧂💧 Gestion Eau Maison</h1>
+<h1>🧂💧 Gestion Eau Maison <span class="signature">By GLL</span></h1>
 <div class="utc-info">
     Donnees a jour au : <span id="derniereActualisation">--</span>
 </div>
@@ -240,7 +252,7 @@ canvas { max-width: 100%; height: 300px !important; }
     <div class="config-cadre">
         <div class="config-titre">
             ⚙ Configuration actuelle
-            <span class="config-info">Modifiable uniquement depuis adoucisseur.local/config</span>
+            <span class="config-info">Modifiable uniquement depuis <a href="http://adoucisseur.local/config" target="_blank">adoucisseur.local/config</a></span>
         </div>
         <div class="config-grille" id="configGrille"></div>
     </div>
@@ -269,19 +281,19 @@ canvas { max-width: 100%; height: 300px !important; }
         <div class="graphiques-titre">💧 CONSOMMATION D'EAU</div>
 
         <div class="chart-box">
-    <div class="chart-titre">Consommation - dernieres 24h (resolution 5 min)</div>
-    <canvas id="chart24h"></canvas>
-</div>
+            <div class="chart-titre">Consommation - dernieres 24h (resolution 5 min)</div>
+            <canvas id="chart24h"></canvas>
+        </div>
 
-<div class="chart-box">
-    <div class="chart-titre">Consommation - 7 derniers jours (resolution jour)</div>
-    <canvas id="chartSemaineHeure"></canvas>
-</div>
+        <div class="chart-box">
+            <div class="chart-titre">Consommation - 7 derniers jours (resolution 1h)</div>
+            <canvas id="chartSemaineHeure"></canvas>
+        </div>
 
-<div class="chart-box">
-    <div class="chart-titre">Consommation - dernier mois (resolution jour)</div>
-    <canvas id="chartMois"></canvas>
-</div>
+        <div class="chart-box">
+            <div class="chart-titre">Consommation - 30 derniers jours (resolution jour)</div>
+            <canvas id="chartMois"></canvas>
+        </div>
 
         <div class="chart-box">
             <div class="chart-titre">
@@ -383,7 +395,7 @@ async function loadStatut() {
         grille.innerHTML = "";
 
         const stats = [
-            { label: "Debit instantane", valeur: (s.debit_instantane_lmin !== undefined && s.debit_instantane_lmin !== null ? s.debit_instantane_lmin.toFixed(2) + " L/min" : "N/A"), classe: "info" },
+            { label: "Conso depuis derniere regen", valeur: (s.litres_depuis_derniere_regen !== undefined && s.litres_depuis_derniere_regen !== null ? s.litres_depuis_derniere_regen.toFixed(1) + " L" : "N/A"), classe: "info" },
             { label: "Autonomie estimee", valeur: (s.autonomie_jours_estimee >= 0 ? s.autonomie_jours_estimee.toFixed(1) + " j" : "N/A"), classe: "info" },
             { label: "Ratio L/kg sel", valeur: s.ratio_litres_par_kg_sel.toFixed(1), classe: "info" },
             { label: "Capteur sel", valeur: s.capteur_sel_hs ? "DEFAILLANT" : "OK", classe: s.capteur_sel_hs ? "alerte" : "ok" },
@@ -445,7 +457,6 @@ async function loadConfig() {
 // ============================================================================
 
 function extraireSeuil(chaine) {
-    // Extrait un ou deux nombres d'une chaine type "<=50 mg/L" ou ">=6,5 et <=9 unite pH"
     if (!chaine) return null;
     const nombres = chaine.replace(",", ".").match(/-?\d+\.?\d*/g);
     if (!nombres) return null;
@@ -458,7 +469,6 @@ function calculerCouleur(valeurNum, limiteStr, referenceStr) {
 
     if (valeurNum === null || valeurNum === undefined) return "gris";
 
-    // Cas plage (ex pH : min et max)
     if (reference && reference.length === 2) {
         if (valeurNum < reference[0] || valeurNum > reference[1]) return "orange";
         return "vert";
@@ -468,7 +478,6 @@ function calculerCouleur(valeurNum, limiteStr, referenceStr) {
         return "vert";
     }
 
-    // Cas seuil simple (limite reglementaire max)
     if (limite && limite.length === 1) {
         if (valeurNum > limite[0]) return "rouge";
         if (reference && reference.length === 1 && valeurNum > reference[0]) return "orange";
@@ -529,7 +538,6 @@ async function loadQualiteEau() {
         const grille = document.getElementById("qualiteGrille");
         let html = "";
 
-        // Microbiologie (cas special, pas de jauge numerique)
         const microCouleur = q.microbiologie === "Absence" ? "vert" : "rouge";
         html += `
             <div class="param-card">
@@ -547,7 +555,6 @@ async function loadQualiteEau() {
         html += creerCarteParametre("chlore_libre", "🌊", "Chlore libre", q.chlore_libre);
         html += creerCarteParametre("calcaire_th_brut", "⛰", "Calcaire (eau brute)", q.calcaire_th_brut);
 
-        // Calcaire post-adoucisseur (test manuel, structure differente)
         if (q.calcaire_th_post_adoucisseur) {
             const valManuel = q.calcaire_th_post_adoucisseur.valeur_numerique;
             const dateManuel = q.calcaire_th_post_adoucisseur.timestamp ? new Date(q.calcaire_th_post_adoucisseur.timestamp * 1000).toLocaleDateString('fr-FR') : "N/A";
@@ -587,6 +594,8 @@ async function loadQualiteEau() {
 // ============================================================================
 
 let chart24h, chartSemaineHeure, chartMois, chartAnnee, chartRegen;
+let chart24hDatesCompletes = [];
+let chartSemaineHeureDatesCompletes = [];
 
 function aggregerParIntervalle(data, intervalleSecondes) {
     const buckets = {};
@@ -607,34 +616,31 @@ async function loadGraphique24h() {
         const seuil24h = maintenant - (24 * 3600);
         const data = dataComplete.filter(d => d.timestamp >= seuil24h);
 
-        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}));
+        const labels = data.map(d => {
+            const date = new Date(d.timestamp * 1000);
+            return date.getMinutes() === 0 ? date.getHours() + "h" : "";
+        });
+        chart24hDatesCompletes = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}));
         const valeurs = data.map(d => d.litres);
+
+        const options = chartOptionsDefaut();
+        options.plugins.tooltip = {
+            callbacks: {
+                title: function(context) { return chart24hDatesCompletes[context[0].dataIndex]; },
+                label: function(context) { return context.parsed.y + " L"; }
+            }
+        };
 
         if (!chart24h) {
             const ctx = document.getElementById('chart24h').getContext('2d');
-            chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: chartOptionsDefaut() });
+            chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options });
         } else {
             chart24h.data.labels = labels;
             chart24h.data.datasets[0].data = valeurs;
+            chart24h.options.plugins.tooltip = options.plugins.tooltip;
             chart24h.update();
         }
     } catch(e) { console.error("Erreur graphique 24h:", e); }
-}
-
-
-function aggregerParJour(data) {
-    const buckets = {};
-    data.forEach(d => {
-        const date = new Date(d.timestamp * 1000);
-        const cle = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
-        if (!buckets[cle]) buckets[cle] = { total: 0, timestampRepresentatif: d.timestamp };
-        buckets[cle].total += d.litres;
-    });
-    return Object.keys(buckets).sort().map(k => ({
-        jour: k,
-        litres: Math.round(buckets[k].total * 100) / 100,
-        timestamp: buckets[k].timestampRepresentatif
-    }));
 }
 
 async function loadGraphiqueSemaineHeure() {
@@ -642,22 +648,34 @@ async function loadGraphiqueSemaineHeure() {
         const res = await fetch("eau_semaine.json?" + Date.now());
         const dataComplete = await res.json();
 
-        const data = aggregerParJour(dataComplete);
+        const data = aggregerParIntervalle(dataComplete, 3600);
 
-        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleDateString('fr-FR', {weekday:'short', day:'2-digit', month:'2-digit'}));
+        const labels = data.map(d => {
+            const date = new Date(d.timestamp * 1000);
+            return date.getHours() === 0 ? date.toLocaleDateString('fr-FR', {weekday:'short', day:'2-digit'}) : "";
+        });
+        chartSemaineHeureDatesCompletes = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit'}) + "h");
         const valeurs = data.map(d => d.litres);
+
+        const options = chartOptionsDefaut();
+        options.plugins.tooltip = {
+            callbacks: {
+                title: function(context) { return chartSemaineHeureDatesCompletes[context[0].dataIndex]; },
+                label: function(context) { return context.parsed.y + " L"; }
+            }
+        };
 
         if (!chartSemaineHeure) {
             const ctx = document.getElementById('chartSemaineHeure').getContext('2d');
-            chartSemaineHeure = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, backgroundColor: 'rgba(0,212,255,0.6)', borderColor: 'rgba(0,212,255,1)', borderWidth: 1 }] }, options: chartOptionsDefaut() });
+            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options });
         } else {
             chartSemaineHeure.data.labels = labels;
             chartSemaineHeure.data.datasets[0].data = valeurs;
+            chartSemaineHeure.options.plugins.tooltip = options.plugins.tooltip;
             chartSemaineHeure.update();
         }
-    } catch(e) { console.error("Erreur graphique semaine/jour:", e); }
+    } catch(e) { console.error("Erreur graphique semaine/heure:", e); }
 }
-
 
 async function loadGraphiqueMois() {
     try {
@@ -679,7 +697,6 @@ async function loadGraphiqueMois() {
         }
     } catch(e) { console.error("Erreur graphique mois:", e); }
 }
-
 
 let donneesAnnees = null;
 
@@ -720,9 +737,14 @@ async function loadRegenerations() {
         const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleDateString('fr-FR'));
         const valeurs = data.map(d => d.litres_consommes);
 
+        const optionsRegen = chartOptionsDefaut();
+        optionsRegen.scales.x.ticks.font = { size: 13 };
+        optionsRegen.scales.y.ticks.font = { size: 13 };
+        optionsRegen.plugins.legend.labels.font = { size: 14 };
+
         if (!chartRegen) {
             const ctx = document.getElementById('chartRegen').getContext('2d');
-            chartRegen = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Litres consommes pendant la regen', data: valeurs, backgroundColor: 'rgba(255,165,0,0.7)', borderColor: 'rgba(255,165,0,1)', borderWidth: 1 }] }, options: chartOptionsDefaut() });
+            chartRegen = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Litres consommes pendant la regen', data: valeurs, backgroundColor: 'rgba(255,165,0,0.7)', borderColor: 'rgba(255,165,0,1)', borderWidth: 1 }] }, options: optionsRegen });
         } else {
             chartRegen.data.labels = labels;
             chartRegen.data.datasets[0].data = valeurs;
