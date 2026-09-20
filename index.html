@@ -628,6 +628,7 @@ function aggregerParIntervalle(data, intervalleSecondes) {
     return Object.keys(buckets).sort((a,b) => a - b).map(k => ({ timestamp: parseInt(k), litres: Math.round(buckets[k] * 100) / 100 }));
 }
 
+
 async function loadGraphique24h() {
     try {
         const res = await fetch("eau_semaine.json?" + Date.now());
@@ -645,25 +646,30 @@ async function loadGraphique24h() {
         const valeurs = data.map(d => d.litres);
 
         const options = chartOptionsDefaut();
+        options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
         options.plugins.tooltip = {
             callbacks: {
                 title: function(context) { return chart24hDatesCompletes[context[0].dataIndex]; },
                 label: function(context) { return context.parsed.y + " L"; }
             }
         };
+        options.scales.x.afterBuildTicks = axis => {
+            axis.ticks = axis.ticks.filter(t => labels[t.value] !== "");
+        };
 
         if (!chart24h) {
             const ctx = document.getElementById('chart24h').getContext('2d');
-            
-			chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
+            chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
         } else {
             chart24h.data.labels = labels;
             chart24h.data.datasets[0].data = valeurs;
-            chart24h.options.plugins.tooltip = options.plugins.tooltip;
+            chart24h.options = options;
             chart24h.update();
         }
     } catch(e) { console.error("Erreur graphique 24h:", e); }
 }
+
+
 
 async function loadGraphiqueSemaineHeure() {
     try {
@@ -680,25 +686,29 @@ async function loadGraphiqueSemaineHeure() {
         const valeurs = data.map(d => d.litres);
 
         const options = chartOptionsDefaut();
+        options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
         options.plugins.tooltip = {
             callbacks: {
                 title: function(context) { return chartSemaineHeureDatesCompletes[context[0].dataIndex]; },
                 label: function(context) { return context.parsed.y + " L"; }
             }
         };
+        options.scales.x.afterBuildTicks = axis => {
+            axis.ticks = axis.ticks.filter(t => labels[t.value] !== "");
+        };
 
         if (!chartSemaineHeure) {
             const ctx = document.getElementById('chartSemaineHeure').getContext('2d');
-            
-			chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
+            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
         } else {
             chartSemaineHeure.data.labels = labels;
             chartSemaineHeure.data.datasets[0].data = valeurs;
-            chartSemaineHeure.options.plugins.tooltip = options.plugins.tooltip;
+            chartSemaineHeure.options = options;
             chartSemaineHeure.update();
         }
     } catch(e) { console.error("Erreur graphique semaine/heure:", e); }
 }
+
 
 async function loadGraphiqueMois() {
     try {
