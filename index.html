@@ -265,18 +265,22 @@ canvas { max-width: 100%; height: 300px !important; }
          SECTION GRAPHIQUES EAU
          ============================================ -->
 
-    <div class="graphiques-section">
-        <div class="graphiques-titre">💧 CONSOMMATION D'EAU</div>
 
-        <div class="chart-box">
-            <div class="chart-titre">Consommation - 7 derniers jours (resolution 5 min)</div>
-            <canvas id="chartSemaine"></canvas>
-        </div>
+<div class="chart-box">
+    <div class="chart-titre">Consommation - dernieres 24h (resolution 5 min)</div>
+    <canvas id="chart24h"></canvas>
+</div>
 
-        <div class="chart-box">
-            <div class="chart-titre">Consommation - dernier mois (resolution horaire)</div>
-            <canvas id="chartMois"></canvas>
-        </div>
+<div class="chart-box">
+    <div class="chart-titre">Consommation - 7 derniers jours (resolution 1h)</div>
+    <canvas id="chartSemaineHeure"></canvas>
+</div>
+
+<div class="chart-box">
+    <div class="chart-titre">Consommation - dernier mois (resolution jour)</div>
+    <canvas id="chartMois"></canvas>
+</div>
+
 
         <div class="chart-box">
             <div class="chart-titre">
@@ -581,36 +585,80 @@ async function loadQualiteEau() {
 // GRAPHIQUES
 // ============================================================================
 
-let chartSemaine, chartMois, chartAnnee, chartRegen;
 
-async function loadGraphiqueSemaine() {
-    try {
-        const res = await fetch("eau_semaine.json?" + Date.now());
-        const data = await res.json();
-        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {weekday:'short', hour:'2-digit', minute:'2-digit'}));
-        const valeurs = data.map(d => d.litres);
+let chart24h, chartSemaineHeure, chartMois, chartAnnee, chartRegen;
 
-        if (!chartSemaine) {
-            const ctx = document.getElementById('chartSemaine').getContext('2d');
-            chartSemaine = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: chartOptionsDefaut() });
-        } else {
-            chartSemaine.data.labels = labels;
-            chartSemaine.data.datasets[0].data = valeurs;
-            chartSemaine.update();
-        }
-    } catch(e) { console.error("Erreur graphique semaine:", e); }
+// Fonction utilitaire d'agregation par intervalle (en secondes)
+function aggregerParIntervalle(data, intervalleSecondes) {
+    const buckets = {};
+    data.forEach(d => {
+        const cle = Math.floor(d.timestamp / intervalleSecondes) * intervalleSecondes;
+        if (!buckets[cle]) buckets[cle] = 0;
+        buckets[cle] += d.litres;
+    });
+    return Object.keys(buckets).sort((a,b) => a - b).map(k => ({ timestamp: parseInt(k), litres: Math.round(buckets[k] * 100) / 100 }));
 }
 
+// ---------------- 24h / 5min (filtrage des donnees semaine) ----------------
+async function loadGraphique24h() {
+    try {
+        const res = await fetch("eau_semaine.json?" + Date.now());
+        const dataComplete = await res.json();
+
+        const maintenant = Math.floor(Date.now() / 1000);
+        const seuil24h = maintenant - (24 * 3600);
+        const data = dataComplete.filter(d => d.timestamp >= seuil24h);
+
+        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}));
+        const valeurs = data.map(d => d.litres);
+
+        if (!chart24h) {
+            const ctx = document.getElementById('chart24h').getContext('2d');
+            chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: chartOptionsDefaut() });
+        } else {
+            chart24h.data.labels = labels;
+            chart24h.data.datasets[0].data = valeurs;
+            chart24h.update();
+        }
+    } catch(e) { console.error("Erreur graphique 24h:", e); }
+}
+
+// ---------------- 7 jours / 1h (agregation des donnees semaine) ----------------
+async function loadGraphiqueSemaineHeure() {
+    try {
+        const res = await fetch("eau_semaine.json?" + Date.now());
+        const dataComplete = await res.json();
+
+        const data = aggregerParIntervalle(dataComplete, 3600);
+
+        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {weekday:'short', hour:'2-digit'}));
+        const valeurs = data.map(d => d.litres);
+
+        if (!chartSemaineHeure) {
+            const ctx = document.getElementById('chartSemaineHeure').getContext('2d');
+            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: chartOptionsDefaut() });
+        } else {
+            chartSemaineHeure.data.labels = labels;
+            chartSemaineHeure.data.datasets[0].data = valeurs;
+            chartSemaineHeure.update();
+        }
+    } catch(e) { console.error("Erreur graphique semaine/heure:", e); }
+}
+
+// ---------------- Mois / jour (agregation des donnees mois) ----------------
 async function loadGraphiqueMois() {
     try {
         const res = await fetch("eau_mois.json?" + Date.now());
-        const data = await res.json();
-        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit'}));
+        const dataComplete = await res.json();
+
+        const data = aggregerParIntervalle(dataComplete, 86400);
+
+        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'}));
         const valeurs = data.map(d => d.litres);
 
         if (!chartMois) {
             const ctx = document.getElementById('chartMois').getContext('2d');
-            chartMois = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: chartOptionsDefaut() });
+            chartMois = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, backgroundColor: 'rgba(0,212,255,0.6)', borderColor: 'rgba(0,212,255,1)', borderWidth: 1 }] }, options: chartOptionsDefaut() });
         } else {
             chartMois.data.labels = labels;
             chartMois.data.datasets[0].data = valeurs;
@@ -619,77 +667,6 @@ async function loadGraphiqueMois() {
     } catch(e) { console.error("Erreur graphique mois:", e); }
 }
 
-let donneesAnnees = null;
-
-async function loadGraphiqueAnnee() {
-    try {
-        if (!donneesAnnees) {
-            const res = await fetch("eau_annees.json?" + Date.now());
-            donneesAnnees = await res.json();
-            const select = document.getElementById("selecteurAnnee");
-            select.innerHTML = "";
-            Object.keys(donneesAnnees).sort().reverse().forEach(annee => {
-                const option = document.createElement("option");
-                option.value = annee;
-                option.textContent = annee;
-                select.appendChild(option);
-            });
-        }
-        const anneeChoisie = document.getElementById("selecteurAnnee").value;
-        const donneesAnnee = donneesAnnees[anneeChoisie] || [];
-        const labels = donneesAnnee.map(d => d.mois);
-        const valeurs = donneesAnnee.map(d => d.litres);
-
-        if (!chartAnnee) {
-            const ctx = document.getElementById('chartAnnee').getContext('2d');
-            chartAnnee = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Litres consommes', data: valeurs, backgroundColor: 'rgba(100,255,218,0.6)', borderColor: 'rgba(100,255,218,1)', borderWidth: 1 }] }, options: chartOptionsDefaut() });
-        } else {
-            chartAnnee.data.labels = labels;
-            chartAnnee.data.datasets[0].data = valeurs;
-            chartAnnee.update();
-        }
-    } catch(e) { console.error("Erreur graphique annee:", e); }
-}
-
-async function loadRegenerations() {
-    try {
-        const res = await fetch("regenerations.json?" + Date.now());
-        const data = await res.json();
-        const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleDateString('fr-FR'));
-        const valeurs = data.map(d => d.litres_consommes);
-
-        if (!chartRegen) {
-            const ctx = document.getElementById('chartRegen').getContext('2d');
-            chartRegen = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Litres consommes pendant la regen', data: valeurs, backgroundColor: 'rgba(255,165,0,0.7)', borderColor: 'rgba(255,165,0,1)', borderWidth: 1 }] }, options: chartOptionsDefaut() });
-        } else {
-            chartRegen.data.labels = labels;
-            chartRegen.data.datasets[0].data = valeurs;
-            chartRegen.update();
-        }
-
-        const tbody = document.getElementById("tableRegenBody");
-        tbody.innerHTML = "";
-        data.slice().reverse().forEach(r => {
-            const tr = document.createElement("tr");
-            const dateStr = new Date(r.timestamp * 1000).toLocaleString('fr-FR');
-            const dureeStr = Math.round(r.duree_secondes / 60) + " min";
-            tr.innerHTML = `<td>${dateStr}</td><td>${dureeStr}</td><td>${r.litres_consommes} L</td>`;
-            tbody.appendChild(tr);
-        });
-    } catch(e) { console.error("Erreur regenerations:", e); }
-}
-
-function chartOptionsDefaut() {
-    return {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#eee' } } },
-        scales: {
-            x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-            y: { beginAtZero: true, ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } }
-        }
-    };
-}
 
 // ============================================================================
 // INITIALISATION ET REFRESH AUTO
@@ -698,7 +675,8 @@ function chartOptionsDefaut() {
 loadStatut();
 loadConfig();
 loadQualiteEau();
-loadGraphiqueSemaine();
+loadGraphique24h();
+loadGraphiqueSemaineHeure();
 loadGraphiqueMois();
 loadGraphiqueAnnee();
 loadRegenerations();
