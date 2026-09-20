@@ -628,6 +628,22 @@ function aggregerParIntervalle(data, intervalleSecondes) {
     return Object.keys(buckets).sort((a,b) => a - b).map(k => ({ timestamp: parseInt(k), litres: Math.round(buckets[k] * 100) / 100 }));
 }
 
+function calculerCumulAvecResetJournalier(data) {
+    let cumul = 0;
+    let jourCourant = null;
+    return data.map(d => {
+        const date = new Date(d.timestamp * 1000);
+        const cleJour = date.getFullYear() + '-' + date.getMonth() + '-' + date.getDate();
+        if (cleJour !== jourCourant) {
+            jourCourant = cleJour;
+            cumul = 0;
+        }
+        cumul += d.litres;
+        return { timestamp: d.timestamp, cumul: Math.round(cumul * 100) / 100 };
+    });
+}
+
+
 
 async function loadGraphique24h() {
     try {
@@ -636,21 +652,23 @@ async function loadGraphique24h() {
 
         const maintenant = Math.floor(Date.now() / 1000);
         const seuil24h = maintenant - (24 * 3600);
-        const data = dataComplete.filter(d => d.timestamp >= seuil24h);
+        const dataFiltree = dataComplete.filter(d => d.timestamp >= seuil24h).sort((a,b) => a.timestamp - b.timestamp);
+
+        const data = calculerCumulAvecResetJournalier(dataFiltree);
 
         const labels = data.map(d => {
             const date = new Date(d.timestamp * 1000);
             return date.getMinutes() === 0 ? date.getHours() + "h" : "";
         });
         chart24hDatesCompletes = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}));
-        const valeurs = data.map(d => d.litres);
+        const valeurs = data.map(d => d.cumul);
 
         const options = chartOptionsDefaut();
         options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
         options.plugins.tooltip = {
             callbacks: {
                 title: function(context) { return chart24hDatesCompletes[context[0].dataIndex]; },
-                label: function(context) { return context.parsed.y + " L"; }
+                label: function(context) { return "Cumul: " + context.parsed.y + " L"; }
             }
         };
         options.scales.x.afterBuildTicks = axis => {
@@ -659,7 +677,7 @@ async function loadGraphique24h() {
 
         if (!chart24h) {
             const ctx = document.getElementById('chart24h').getContext('2d');
-            chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
+            chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres (cumul)', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.1, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
         } else {
             chart24h.data.labels = labels;
             chart24h.data.datasets[0].data = valeurs;
@@ -671,26 +689,29 @@ async function loadGraphique24h() {
 
 
 
+
+
 async function loadGraphiqueSemaineHeure() {
     try {
         const res = await fetch("eau_semaine.json?" + Date.now());
         const dataComplete = await res.json();
 
-        const data = aggregerParIntervalle(dataComplete, 3600);
+        const dataAggregee = aggregerParIntervalle(dataComplete, 3600);
+        const data = calculerCumulAvecResetJournalier(dataAggregee);
 
         const labels = data.map(d => {
             const date = new Date(d.timestamp * 1000);
             return date.getHours() === 0 ? date.toLocaleDateString('fr-FR', {weekday:'short', day:'2-digit'}) : "";
         });
         chartSemaineHeureDatesCompletes = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit'}) + "h");
-        const valeurs = data.map(d => d.litres);
+        const valeurs = data.map(d => d.cumul);
 
         const options = chartOptionsDefaut();
         options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
         options.plugins.tooltip = {
             callbacks: {
                 title: function(context) { return chartSemaineHeureDatesCompletes[context[0].dataIndex]; },
-                label: function(context) { return context.parsed.y + " L"; }
+                label: function(context) { return "Cumul: " + context.parsed.y + " L"; }
             }
         };
         options.scales.x.afterBuildTicks = axis => {
@@ -699,7 +720,7 @@ async function loadGraphiqueSemaineHeure() {
 
         if (!chartSemaineHeure) {
             const ctx = document.getElementById('chartSemaineHeure').getContext('2d');
-            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
+            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres (cumul)', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.1, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
         } else {
             chartSemaineHeure.data.labels = labels;
             chartSemaineHeure.data.datasets[0].data = valeurs;
@@ -708,6 +729,7 @@ async function loadGraphiqueSemaineHeure() {
         }
     } catch(e) { console.error("Erreur graphique semaine/heure:", e); }
 }
+
 
 
 async function loadGraphiqueMois() {
