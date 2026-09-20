@@ -6,6 +6,7 @@
 <title>Gestion Eau Maison</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -183,12 +184,16 @@ h1 .signature {
 .chart-box { background: rgba(26,26,46,0.8); border: 2px solid #0f3460; border-radius: 15px; padding: 25px; margin-bottom: 30px; }
 .chart-titre { font-size: 1.3em; margin-bottom: 15px; color: #64ffda; display: flex; justify-content: space-between; align-items: center; }
 .chart-titre select { background: #0a192f; color: #64ffda; border: 2px solid #64ffda; border-radius: 8px; padding: 6px 12px; font-size: 0.7em; cursor: pointer; }
-canvas { max-width: 100%; height: 300px !important; }
-#chartRegen { height: 450px !important; }
+
+/* Conteneurs dédiés pour chaque canvas : évite les conflits de dimensionnement
+   entre le mode "responsive" de Chart.js et un height forcé en CSS sur <canvas> */
+.chart-wrapper { position: relative; width: 100%; height: 300px; }
+.chart-wrapper.regen { height: 450px; }
+.chart-wrapper canvas { width: 100% !important; height: 100% !important; }
 
 .table-regen { width: 100%; border-collapse: collapse; margin-top: 15px; }
-.table-regen th { text-align: left; padding: 10px; color: #00d4ff; border-bottom: 2px solid #0f3460; font-size: 0.85em; text-transform: uppercase; }
-.table-regen td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.95em; }
+.table-regen th { text-align: left; padding: 10px; color: #00d4ff; border-bottom: 2px solid #0f3460; font-size: 0.85em; text-transform: uppercase; line-height: 1.4; }
+.table-regen td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.95em; line-height: 1.4; vertical-align: middle; }
 .table-regen tr:hover { background: rgba(255,255,255,0.03); }
 
 @media (max-width: 768px) {
@@ -282,17 +287,17 @@ canvas { max-width: 100%; height: 300px !important; }
 
         <div class="chart-box">
             <div class="chart-titre">Consommation - dernieres 24h (resolution 5 min)</div>
-            <canvas id="chart24h"></canvas>
+            <div class="chart-wrapper"><canvas id="chart24h"></canvas></div>
         </div>
 
         <div class="chart-box">
             <div class="chart-titre">Consommation - 7 derniers jours (resolution 1h)</div>
-            <canvas id="chartSemaineHeure"></canvas>
+            <div class="chart-wrapper"><canvas id="chartSemaineHeure"></canvas></div>
         </div>
 
         <div class="chart-box">
             <div class="chart-titre">Consommation - 30 derniers jours (resolution jour)</div>
-            <canvas id="chartMois"></canvas>
+            <div class="chart-wrapper"><canvas id="chartMois"></canvas></div>
         </div>
 
         <div class="chart-box">
@@ -300,12 +305,12 @@ canvas { max-width: 100%; height: 300px !important; }
                 <span>Consommation mensuelle par annee</span>
                 <select id="selecteurAnnee" onchange="loadGraphiqueAnnee()"></select>
             </div>
-            <canvas id="chartAnnee"></canvas>
+            <div class="chart-wrapper"><canvas id="chartAnnee"></canvas></div>
         </div>
 
         <div class="chart-box">
             <div class="chart-titre">10 dernieres regenerations</div>
-            <canvas id="chartRegen"></canvas>
+            <div class="chart-wrapper regen"><canvas id="chartRegen"></canvas></div>
             <table class="table-regen" id="tableRegen">
                 <thead><tr><th>Date</th><th>Duree</th><th>Eau consommee</th></tr></thead>
                 <tbody id="tableRegenBody"></tbody>
@@ -615,8 +620,6 @@ const pluginCurseurVertical = {
 };
 
 let chart24h, chartSemaineHeure, chartMois, chartAnnee, chartRegen;
-let chart24hDatesCompletes = [];
-let chartSemaineHeureDatesCompletes = [];
 
 function aggregerParIntervalle(data, intervalleSecondes) {
     const buckets = {};
@@ -643,7 +646,30 @@ function calculerCumulAvecResetJournalier(data) {
     });
 }
 
-
+// Options communes pour les axes temporels natifs (24h et 7 jours glissants)
+function optionsAxeTemps(unite, formatTooltip) {
+    const options = chartOptionsDefaut();
+    options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
+    options.scales.x = {
+        type: 'time',
+        time: {
+            unit: unite,
+            tooltipFormat: formatTooltip
+        },
+        ticks: {
+            color: '#aaa',
+            autoSkip: true,
+            maxRotation: 0
+        },
+        grid: { color: 'rgba(255,255,255,0.1)' }
+    };
+    options.plugins.tooltip = {
+        callbacks: {
+            label: function(context) { return "Cumul: " + context.parsed.y + " L"; }
+        }
+    };
+    return options;
+}
 
 async function loadGraphique24h() {
     try {
@@ -656,40 +682,21 @@ async function loadGraphique24h() {
 
         const data = calculerCumulAvecResetJournalier(dataFiltree);
 
-        const labels = data.map(d => {
-            const date = new Date(d.timestamp * 1000);
-            return date.getMinutes() === 0 ? date.getHours() + "h" : "";
-        });
-        chart24hDatesCompletes = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}));
-        const valeurs = data.map(d => d.cumul);
+        // Format {x, y} requis par l'axe temporel natif de Chart.js
+        const points = data.map(d => ({ x: d.timestamp * 1000, y: d.cumul }));
 
-        const options = chartOptionsDefaut();
-        options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
-        options.plugins.tooltip = {
-            callbacks: {
-                title: function(context) { return chart24hDatesCompletes[context[0].dataIndex]; },
-                label: function(context) { return "Cumul: " + context.parsed.y + " L"; }
-            }
-        };
-        options.scales.x.afterBuildTicks = axis => {
-            axis.ticks = axis.ticks.filter(t => labels[t.value] !== "");
-        };
+        const options = optionsAxeTemps('hour', 'dd/MM HH:mm');
 
         if (!chart24h) {
             const ctx = document.getElementById('chart24h').getContext('2d');
-            chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres (cumul)', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.1, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
+            chart24h = new Chart(ctx, { type: 'line', data: { datasets: [{ label: 'Litres (cumul)', data: points, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.1, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
         } else {
-            chart24h.data.labels = labels;
-            chart24h.data.datasets[0].data = valeurs;
+            chart24h.data.datasets[0].data = points;
             chart24h.options = options;
             chart24h.update();
         }
     } catch(e) { console.error("Erreur graphique 24h:", e); }
 }
-
-
-
-
 
 async function loadGraphiqueSemaineHeure() {
     try {
@@ -699,38 +706,20 @@ async function loadGraphiqueSemaineHeure() {
         const dataAggregee = aggregerParIntervalle(dataComplete, 3600);
         const data = calculerCumulAvecResetJournalier(dataAggregee);
 
-        const labels = data.map(d => {
-            const date = new Date(d.timestamp * 1000);
-            return date.getHours() === 0 ? date.toLocaleDateString('fr-FR', {weekday:'short', day:'2-digit'}) : "";
-        });
-        chartSemaineHeureDatesCompletes = data.map(d => new Date(d.timestamp * 1000).toLocaleString('fr-FR', {weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit'}) + "h");
-        const valeurs = data.map(d => d.cumul);
+        const points = data.map(d => ({ x: d.timestamp * 1000, y: d.cumul }));
 
-        const options = chartOptionsDefaut();
-        options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
-        options.plugins.tooltip = {
-            callbacks: {
-                title: function(context) { return chartSemaineHeureDatesCompletes[context[0].dataIndex]; },
-                label: function(context) { return "Cumul: " + context.parsed.y + " L"; }
-            }
-        };
-        options.scales.x.afterBuildTicks = axis => {
-            axis.ticks = axis.ticks.filter(t => labels[t.value] !== "");
-        };
+        const options = optionsAxeTemps('day', 'EEE dd/MM HH:mm');
 
         if (!chartSemaineHeure) {
             const ctx = document.getElementById('chartSemaineHeure').getContext('2d');
-            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres (cumul)', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.1, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
+            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { datasets: [{ label: 'Litres (cumul)', data: points, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.1, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
         } else {
-            chartSemaineHeure.data.labels = labels;
-            chartSemaineHeure.data.datasets[0].data = valeurs;
+            chartSemaineHeure.data.datasets[0].data = points;
             chartSemaineHeure.options = options;
             chartSemaineHeure.update();
         }
     } catch(e) { console.error("Erreur graphique semaine/heure:", e); }
 }
-
-
 
 async function loadGraphiqueMois() {
     try {
