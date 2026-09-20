@@ -593,6 +593,27 @@ async function loadQualiteEau() {
 // GRAPHIQUES
 // ============================================================================
 
+const pluginCurseurVertical = {
+    id: 'curseurVertical',
+    afterDraw: (chart) => {
+        if (chart.tooltip?._active?.length) {
+            const ctx = chart.ctx;
+            const activePoint = chart.tooltip._active[0];
+            const x = activePoint.element.x;
+            const topY = chart.scales.y.top;
+            const bottomY = chart.scales.y.bottom;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x, topY);
+            ctx.lineTo(x, bottomY);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+};
+
 let chart24h, chartSemaineHeure, chartMois, chartAnnee, chartRegen;
 let chart24hDatesCompletes = [];
 let chartSemaineHeureDatesCompletes = [];
@@ -633,7 +654,8 @@ async function loadGraphique24h() {
 
         if (!chart24h) {
             const ctx = document.getElementById('chart24h').getContext('2d');
-            chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options });
+            
+			chart24h = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
         } else {
             chart24h.data.labels = labels;
             chart24h.data.datasets[0].data = valeurs;
@@ -667,7 +689,8 @@ async function loadGraphiqueSemaineHeure() {
 
         if (!chartSemaineHeure) {
             const ctx = document.getElementById('chartSemaineHeure').getContext('2d');
-            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options });
+            
+			chartSemaineHeure = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Litres', data: valeurs, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
         } else {
             chartSemaineHeure.data.labels = labels;
             chartSemaineHeure.data.datasets[0].data = valeurs;
