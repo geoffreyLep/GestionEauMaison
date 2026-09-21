@@ -46,10 +46,6 @@ h1 .signature {
     margin: 0 auto;
 }
 
-/* ============================================
-   CADRE STATUT ADOUCISSEUR
-   ============================================ */
-
 .statut-cadre {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     border: 3px solid #0f3460;
@@ -118,10 +114,6 @@ h1 .signature {
 
 .derniere-maj { text-align: center; font-size: 0.9em; color: #888; margin-top: 25px; font-style: italic; }
 
-/* ============================================
-   CADRE CONFIGURATION
-   ============================================ */
-
 .config-cadre { background: rgba(26,26,46,0.8); border: 2px solid #0f3460; border-radius: 15px; padding: 25px; margin-bottom: 50px; }
 .config-titre { font-size: 1.4em; margin-bottom: 20px; color: #64ffda; display: flex; justify-content: space-between; align-items: center; }
 .config-info { font-size: 0.75em; color: #888; font-weight: normal; font-style: italic; }
@@ -131,10 +123,6 @@ h1 .signature {
 .config-item { background: rgba(255,255,255,0.04); border-left: 3px solid #64ffda; border-radius: 6px; padding: 10px 15px; }
 .config-label { font-size: 0.75em; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
 .config-valeur { font-size: 1.2em; color: #eee; font-weight: bold; margin-top: 3px; }
-
-/* ============================================
-   QUALITE DE L'EAU
-   ============================================ */
 
 .qualite-cadre { background: rgba(26,26,46,0.8); border: 2px solid #0f3460; border-radius: 15px; padding: 25px; margin-bottom: 50px; }
 .qualite-titre { font-size: 2em; text-align: center; margin-bottom: 10px; color: #00d4ff; text-shadow: 0 0 15px rgba(0,212,255,0.6); }
@@ -166,7 +154,6 @@ h1 .signature {
 
 .qualite-meta { text-align: center; font-size: 0.85em; color: #888; margin-bottom: 20px; }
 
-/* Modal */
 .modal-overlay { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
 .modal-overlay.actif { display: flex; }
 .modal-box { background: #16213e; border: 2px solid #64ffda; border-radius: 15px; padding: 25px; max-width: 450px; margin: 20px; }
@@ -174,10 +161,6 @@ h1 .signature {
 .modal-box .modal-code { font-size: 0.8em; color: #888; margin-bottom: 15px; font-style: italic; }
 .modal-box p { line-height: 1.6; color: #ddd; }
 .modal-close { margin-top: 20px; background: #64ffda; color: #0a0e27; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-
-/* ============================================
-   GRAPHIQUES
-   ============================================ */
 
 .graphiques-section { margin-top: 50px; }
 .graphiques-titre { font-size: 2em; text-align: center; margin-bottom: 30px; color: #00d4ff; text-shadow: 0 0 15px rgba(0,212,255,0.6); }
@@ -268,7 +251,16 @@ h1 .signature {
         <div class="graphiques-titre">💧 CONSOMMATION D'EAU</div>
 
         <div class="chart-box">
-            <div class="chart-titre">Consommation - dernieres 24h (resolution 5 min)</div>
+            <div class="chart-titre">
+                <span>Consommation - dernieres 24h (resolution 5 min)</span>
+                <label style="font-size:0.6em; display:flex; align-items:center; gap:6px; font-weight:normal; cursor:pointer;">
+                    <input type="checkbox" id="modeHistoriqueCheckbox" onchange="toggleModeHistorique()"> Mode historique
+                </label>
+            </div>
+            <div id="historiqueControles" style="display:none; margin-bottom:15px;">
+                <input type="range" id="sliderHistorique" min="0" max="0" step="1" value="0" style="width:100%; accent-color:#64ffda;" oninput="onSliderHistoriqueChange()">
+                <div style="text-align:center; font-size:0.85em; color:#aaa; margin-top:8px;" id="plageHistoriqueTexte">--</div>
+            </div>
             <div class="chart-wrapper"><canvas id="chart24h"></canvas></div>
         </div>
 
@@ -586,6 +578,30 @@ const pluginCurseurVertical = {
 
 let chart24h, chartSemaineHeure, chartMois, chartAnnee, chartRegen;
 
+let modeHistorique24h = false;
+let decalageHeures24h = 0;
+let finFenetreHistoriqueFixe = null;
+
+function toggleModeHistorique() {
+    modeHistorique24h = document.getElementById('modeHistoriqueCheckbox').checked;
+    document.getElementById('historiqueControles').style.display = modeHistorique24h ? 'block' : 'none';
+
+    if (modeHistorique24h) {
+        decalageHeures24h = 0;
+        finFenetreHistoriqueFixe = Math.floor(Date.now() / 1000);
+        document.getElementById('sliderHistorique').value = 0;
+    } else {
+        finFenetreHistoriqueFixe = null;
+    }
+    loadGraphique24h();
+}
+
+function onSliderHistoriqueChange() {
+    decalageHeures24h = parseInt(document.getElementById('sliderHistorique').value, 10);
+    finFenetreHistoriqueFixe = Math.floor(Date.now() / 1000) - (decalageHeures24h * 3600);
+    loadGraphique24h();
+}
+
 function aggregerParIntervalle(data, intervalleSecondes) {
     const buckets = {};
     data.forEach(d => {
@@ -596,7 +612,6 @@ function aggregerParIntervalle(data, intervalleSecondes) {
     return Object.keys(buckets).sort((a,b) => a - b).map(k => ({ timestamp: parseInt(k), litres: Math.round(buckets[k] * 100) / 100 }));
 }
 
-// Reset journalier avec insertion d'un "front" vertical net a minuit
 function calculerCumulAvecResetJournalier(data) {
     let cumul = 0;
     let jourCourant = null;
@@ -623,8 +638,6 @@ function calculerCumulAvecResetJournalier(data) {
 
     return resultat;
 }
-
-// ---- Coloration regen / donnees manquantes ----
 
 const COULEUR_NORMALE_24H = { border: '#64ffda', fill: 'rgba(100,255,218,0.2)' };
 const COULEUR_NORMALE_7J   = { border: '#00d4ff', fill: 'rgba(0,212,255,0.2)' };
@@ -707,7 +720,11 @@ function optionsAxeTemps(unite, formatTooltip, minTs, maxTs) {
         max: maxTs,
         time: {
             unit: unite,
-            tooltipFormat: formatTooltip
+            tooltipFormat: formatTooltip,
+            displayFormats: {
+                hour: "HH'h'",
+                day: "EEE dd/MM"
+            }
         },
         ticks: {
             color: '#aaa',
@@ -728,32 +745,46 @@ function optionsAxeTemps(unite, formatTooltip, minTs, maxTs) {
     return options;
 }
 
-
 async function loadGraphique24h() {
     try {
         const res = await fetch("eau_semaine.json?" + Date.now());
         const dataComplete = await res.json();
 
         const maintenant = Math.floor(Date.now() / 1000);
-        const seuil24h = maintenant - (24 * 3600);
-
-        // Tri complet sur TOUT l'historique disponible (pas seulement les 24h)
         const dataTrieeComplete = dataComplete.slice().sort((a,b) => a.timestamp - b.timestamp);
 
-        // Cumul calcule sur l'historique complet => le cumul de "hier" part bien de minuit
+        const premierTimestamp = dataTrieeComplete.length ? dataTrieeComplete[0].timestamp : maintenant;
+        const maxDecalageHeures = Math.max(0, Math.floor((maintenant - premierTimestamp) / 3600) - 24);
+        const slider = document.getElementById('sliderHistorique');
+        slider.min = 0;
+        slider.max = maxDecalageHeures;
+        if (decalageHeures24h > maxDecalageHeures) decalageHeures24h = maxDecalageHeures;
+        slider.value = decalageHeures24h;
+
+        let finFenetre, debutFenetre;
+        if (modeHistorique24h) {
+            finFenetre = finFenetreHistoriqueFixe !== null ? finFenetreHistoriqueFixe : maintenant;
+            debutFenetre = finFenetre - (24 * 3600);
+        } else {
+            finFenetre = maintenant;
+            debutFenetre = maintenant - (24 * 3600);
+        }
+
         const dataCumulComplet = calculerCumulAvecResetJournalier(dataTrieeComplete);
+        const dataCumulVisible = dataCumulComplet.filter(d => d.timestamp >= debutFenetre && d.timestamp <= finFenetre);
 
-        // On ne garde pour l'AFFICHAGE que la fenetre des dernieres 24h
-        const dataCumulVisible = dataCumulComplet.filter(d => d.timestamp >= seuil24h);
-
-        // Detection des trous sur les donnees brutes visibles uniquement
-        const dataFiltreeBrute = dataTrieeComplete.filter(d => d.timestamp >= seuil24h);
-        const trous = detecterTrous(dataFiltreeBrute, 300);
+        const dataBruteVisible = dataTrieeComplete.filter(d => d.timestamp >= debutFenetre && d.timestamp <= finFenetre);
+        const trous = detecterTrous(dataBruteVisible, 300);
         const intervallesRegen = await getIntervallesRegen();
 
         const points = construirePointsColores(dataCumulVisible, trous, intervallesRegen);
 
-        const options = optionsAxeTemps('hour', 'dd/MM HH:mm', seuil24h * 1000, maintenant * 1000);
+        const options = optionsAxeTemps('hour', 'dd/MM HH:mm', debutFenetre * 1000, finFenetre * 1000);
+
+        if (modeHistorique24h) {
+            const fmt = (ts) => new Date(ts * 1000).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+            document.getElementById('plageHistoriqueTexte').textContent = `Du ${fmt(debutFenetre)} au ${fmt(finFenetre)}`;
+        }
 
         if (!chart24h) {
             const ctx = document.getElementById('chart24h').getContext('2d');
@@ -778,7 +809,6 @@ async function loadGraphique24h() {
         }
     } catch(e) { console.error("Erreur graphique 24h:", e); }
 }
-
 
 async function loadGraphiqueSemaineHeure() {
     try {
