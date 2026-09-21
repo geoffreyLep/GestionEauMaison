@@ -728,6 +728,7 @@ function optionsAxeTemps(unite, formatTooltip, minTs, maxTs) {
     return options;
 }
 
+
 async function loadGraphique24h() {
     try {
         const res = await fetch("eau_semaine.json?" + Date.now());
@@ -735,15 +736,22 @@ async function loadGraphique24h() {
 
         const maintenant = Math.floor(Date.now() / 1000);
         const seuil24h = maintenant - (24 * 3600);
-        const dataFiltree = dataComplete.filter(d => d.timestamp >= seuil24h).sort((a,b) => a.timestamp - b.timestamp);
 
-        const trous = detecterTrous(dataFiltree, 300);
+        // Tri complet sur TOUT l'historique disponible (pas seulement les 24h)
+        const dataTrieeComplete = dataComplete.slice().sort((a,b) => a.timestamp - b.timestamp);
+
+        // Cumul calcule sur l'historique complet => le cumul de "hier" part bien de minuit
+        const dataCumulComplet = calculerCumulAvecResetJournalier(dataTrieeComplete);
+
+        // On ne garde pour l'AFFICHAGE que la fenetre des dernieres 24h
+        const dataCumulVisible = dataCumulComplet.filter(d => d.timestamp >= seuil24h);
+
+        // Detection des trous sur les donnees brutes visibles uniquement
+        const dataFiltreeBrute = dataTrieeComplete.filter(d => d.timestamp >= seuil24h);
+        const trous = detecterTrous(dataFiltreeBrute, 300);
         const intervallesRegen = await getIntervallesRegen();
 
-        const dataCumul = calculerCumulAvecResetJournalier(dataFiltree)
-            .sort((a,b) => a.timestamp - b.timestamp);
-
-        const points = construirePointsColores(dataCumul, trous, intervallesRegen);
+        const points = construirePointsColores(dataCumulVisible, trous, intervallesRegen);
 
         const options = optionsAxeTemps('hour', 'dd/MM HH:mm', seuil24h * 1000, maintenant * 1000);
 
@@ -770,6 +778,7 @@ async function loadGraphique24h() {
         }
     } catch(e) { console.error("Erreur graphique 24h:", e); }
 }
+
 
 async function loadGraphiqueSemaineHeure() {
     try {
