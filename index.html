@@ -286,9 +286,9 @@ h1 .signature {
             <div class="chart-titre">10 dernieres regenerations</div>
             <div class="chart-wrapper regen"><canvas id="chartRegen"></canvas></div>
             <table class="table-regen" id="tableRegen">
-                <thead><tr><th>Date</th><th>Duree</th><th>Eau consommee</th></tr></thead>
-                <tbody id="tableRegenBody"></tbody>
-            </table>
+				<thead><tr><th>Date</th><th>Duree</th><th>Eau consommee</th><th>Eau avant regen</th><th>Rendement</th></tr></thead>
+				<tbody id="tableRegenBody"></tbody>
+			</table>
         </div>
     </div>
 
@@ -935,9 +935,12 @@ async function loadRegenerations() {
             const tr = document.createElement("tr");
             const dateStr = new Date(r.timestamp * 1000).toLocaleString('fr-FR');
             const dureeStr = Math.round(r.duree_secondes / 60) + " min";
-            tr.innerHTML = `<td>${dateStr}</td><td>${dureeStr}</td><td>${r.litres_consommes} L</td>`;
+            const eauAvantStr = (r.litres_service_avant !== null && r.litres_service_avant !== undefined) ? r.litres_service_avant + " L" : "N/A";
+            const rendementStr = (r.rendement_pourcent !== null && r.rendement_pourcent !== undefined) ? r.rendement_pourcent + " %" : "N/A";
+            tr.innerHTML = `<td>${dateStr}</td><td>${dureeStr}</td><td>${r.litres_consommes} L</td><td>${eauAvantStr}</td><td>${rendementStr}</td>`;
             tbody.appendChild(tr);
         });
+
     } catch(e) { console.error("Erreur regenerations:", e); }
 }
 
