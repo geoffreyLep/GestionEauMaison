@@ -185,8 +185,6 @@ h1 .signature {
 .chart-titre { font-size: 1.3em; margin-bottom: 15px; color: #64ffda; display: flex; justify-content: space-between; align-items: center; }
 .chart-titre select { background: #0a192f; color: #64ffda; border: 2px solid #64ffda; border-radius: 8px; padding: 6px 12px; font-size: 0.7em; cursor: pointer; }
 
-/* Conteneurs dédiés pour chaque canvas : évite les conflits de dimensionnement
-   entre le mode "responsive" de Chart.js et un height forcé en CSS sur <canvas> */
 .chart-wrapper { position: relative; width: 100%; height: 300px; }
 .chart-wrapper.regen { height: 450px; }
 .chart-wrapper canvas { width: 100% !important; height: 100% !important; }
@@ -214,10 +212,6 @@ h1 .signature {
 </div>
 
 <div class="container">
-
-    <!-- ============================================
-         SECTION STATUT ADOUCISSEUR
-         ============================================ -->
 
     <div class="statut-cadre">
         <div class="statut-titre">🧂 ADOUCISSEUR</div>
@@ -250,10 +244,6 @@ h1 .signature {
         </div>
     </div>
 
-    <!-- ============================================
-         SECTION CONFIGURATION
-         ============================================ -->
-
     <div class="config-cadre">
         <div class="config-titre">
             ⚙ Configuration actuelle
@@ -261,10 +251,6 @@ h1 .signature {
         </div>
         <div class="config-grille" id="configGrille"></div>
     </div>
-
-    <!-- ============================================
-         SECTION QUALITE DE L'EAU
-         ============================================ -->
 
     <div class="qualite-cadre">
         <div class="qualite-titre">🔬 Qualite de l'eau distribuee</div>
@@ -277,10 +263,6 @@ h1 .signature {
             <p id="conclusionArsTexte"></p>
         </div>
     </div>
-
-    <!-- ============================================
-         SECTION GRAPHIQUES EAU
-         ============================================ -->
 
     <div class="graphiques-section">
         <div class="graphiques-titre">💧 CONSOMMATION D'EAU</div>
@@ -320,7 +302,6 @@ h1 .signature {
 
 </div>
 
-<!-- Modal explicatif -->
 <div class="modal-overlay" id="modalOverlay">
     <div class="modal-box">
         <h3 id="modalTitre"></h3>
@@ -331,10 +312,6 @@ h1 .signature {
 </div>
 
 <script>
-
-// ============================================================================
-// INFOS PEDAGOGIQUES PARAMETRES (contenu redige manuellement, pas une donnee API)
-// ============================================================================
 
 const INFOS_PARAMETRES = {
     microbiologie: { titre: "Microbiologie", codes: "1447, 6455, 1449", explication: "Ces bacteries indiquent une eventuelle contamination fecale de l'eau. Leur absence totale est exigee par la reglementation : la moindre presence signale un risque sanitaire immediat. C'est l'indicateur le plus critique et le plus surveille." },
@@ -362,10 +339,6 @@ function ouvrirModal(cle) {
 function fermerModal() {
     document.getElementById("modalOverlay").classList.remove("actif");
 }
-
-// ============================================================================
-// STATUT ADOUCISSEUR
-// ============================================================================
 
 const SEUIL_ORANGE_SEL = 10;
 const SEUIL_ROUGE_SEL = 1;
@@ -420,10 +393,6 @@ async function loadStatut() {
     }
 }
 
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
-
 async function loadConfig() {
     try {
         const res = await fetch("config.json?" + Date.now());
@@ -456,10 +425,6 @@ async function loadConfig() {
         console.error("Erreur chargement config:", e);
     }
 }
-
-// ============================================================================
-// QUALITE DE L'EAU
-// ============================================================================
 
 function extraireSeuil(chaine) {
     if (!chaine) return null;
@@ -631,27 +596,115 @@ function aggregerParIntervalle(data, intervalleSecondes) {
     return Object.keys(buckets).sort((a,b) => a - b).map(k => ({ timestamp: parseInt(k), litres: Math.round(buckets[k] * 100) / 100 }));
 }
 
+// Reset journalier avec insertion d'un "front" vertical net a minuit
 function calculerCumulAvecResetJournalier(data) {
     let cumul = 0;
     let jourCourant = null;
-    return data.map(d => {
+    const resultat = [];
+
+    data.forEach(d => {
         const date = new Date(d.timestamp * 1000);
         const cleJour = date.getFullYear() + '-' + date.getMonth() + '-' + date.getDate();
+
         if (cleJour !== jourCourant) {
+            if (jourCourant !== null) {
+                const minuit = new Date(date);
+                minuit.setHours(0, 0, 0, 0);
+                resultat.push({ timestamp: Math.floor(minuit.getTime() / 1000), cumul: cumul });
+                resultat.push({ timestamp: Math.floor(minuit.getTime() / 1000) + 1, cumul: 0 });
+            }
             jourCourant = cleJour;
             cumul = 0;
         }
+
         cumul += d.litres;
-        return { timestamp: d.timestamp, cumul: Math.round(cumul * 100) / 100 };
+        resultat.push({ timestamp: d.timestamp, cumul: Math.round(cumul * 100) / 100 });
+    });
+
+    return resultat;
+}
+
+// ---- Coloration regen / donnees manquantes ----
+
+const COULEUR_NORMALE_24H = { border: '#64ffda', fill: 'rgba(100,255,218,0.2)' };
+const COULEUR_NORMALE_7J   = { border: '#00d4ff', fill: 'rgba(0,212,255,0.2)' };
+const COULEUR_REGEN        = { border: '#f44336', fill: 'rgba(244,67,54,0.35)' };
+const COULEUR_MANQUANT     = { border: '#555555', fill: 'rgba(85,85,85,0.15)' };
+
+async function getIntervallesRegen() {
+    try {
+        const res = await fetch("regenerations.json?" + Date.now());
+        const data = await res.json();
+        return data.map(r => ({
+            debut: r.timestamp * 1000,
+            fin: (r.timestamp + (r.duree_secondes || 0)) * 1000
+        }));
+    } catch(e) {
+        console.error("Erreur chargement regenerations pour coloration:", e);
+        return [];
+    }
+}
+
+function estEnRegen(tsMs, intervallesRegen) {
+    return intervallesRegen.some(i => tsMs >= i.debut && tsMs <= i.fin);
+}
+
+function detecterTrous(dataTriee, stepAttenduSecondes, toleranceFacteur = 2) {
+    const trous = [];
+    for (let i = 1; i < dataTriee.length; i++) {
+        const ecart = dataTriee[i].timestamp - dataTriee[i-1].timestamp;
+        if (ecart > stepAttenduSecondes * toleranceFacteur) {
+            trous.push({ debut: dataTriee[i-1].timestamp, fin: dataTriee[i].timestamp });
+        }
+    }
+    return trous;
+}
+
+function estDansUnTrou(ts, trous) {
+    return trous.some(t => ts > t.debut && ts < t.fin);
+}
+
+function construirePointsColores(dataCumul, trous, intervallesRegen) {
+    return dataCumul.map(d => {
+        const tsMs = d.timestamp * 1000;
+        let etat = 'normal';
+        let y = d.cumul;
+
+        if (estDansUnTrou(d.timestamp, trous)) {
+            etat = 'manquant';
+            y = 0;
+        } else if (estEnRegen(tsMs, intervallesRegen)) {
+            etat = 'regen';
+        }
+
+        return { x: tsMs, y: y, etat: etat };
     });
 }
 
-// Options communes pour les axes temporels natifs (24h et 7 jours glissants)
-function optionsAxeTemps(unite, formatTooltip) {
+function segmentColorCallback(couleurNormale) {
+    return {
+        borderColor: (ctx) => {
+            const etat = ctx.p1?.raw?.etat || ctx.p0?.raw?.etat;
+            if (etat === 'manquant') return COULEUR_MANQUANT.border;
+            if (etat === 'regen') return COULEUR_REGEN.border;
+            return couleurNormale.border;
+        },
+        backgroundColor: (ctx) => {
+            const etat = ctx.p1?.raw?.etat || ctx.p0?.raw?.etat;
+            if (etat === 'manquant') return COULEUR_MANQUANT.fill;
+            if (etat === 'regen') return COULEUR_REGEN.fill;
+            return couleurNormale.fill;
+        }
+    };
+}
+
+function optionsAxeTemps(unite, formatTooltip, minTs, maxTs) {
     const options = chartOptionsDefaut();
     options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
     options.scales.x = {
         type: 'time',
+        min: minTs,
+        max: maxTs,
         time: {
             unit: unite,
             tooltipFormat: formatTooltip
@@ -665,7 +718,11 @@ function optionsAxeTemps(unite, formatTooltip) {
     };
     options.plugins.tooltip = {
         callbacks: {
-            label: function(context) { return "Cumul: " + context.parsed.y + " L"; }
+            label: function(context) {
+                const etat = context.raw?.etat;
+                const suffixe = etat === 'regen' ? ' (regeneration en cours)' : (etat === 'manquant' ? ' (donnee indisponible)' : '');
+                return "Cumul: " + context.parsed.y + " L" + suffixe;
+            }
         }
     };
     return options;
@@ -680,16 +737,32 @@ async function loadGraphique24h() {
         const seuil24h = maintenant - (24 * 3600);
         const dataFiltree = dataComplete.filter(d => d.timestamp >= seuil24h).sort((a,b) => a.timestamp - b.timestamp);
 
-        const data = calculerCumulAvecResetJournalier(dataFiltree);
+        const trous = detecterTrous(dataFiltree, 300);
+        const intervallesRegen = await getIntervallesRegen();
 
-        // Format {x, y} requis par l'axe temporel natif de Chart.js
-        const points = data.map(d => ({ x: d.timestamp * 1000, y: d.cumul }));
+        const dataCumul = calculerCumulAvecResetJournalier(dataFiltree)
+            .sort((a,b) => a.timestamp - b.timestamp);
 
-        const options = optionsAxeTemps('hour', 'dd/MM HH:mm');
+        const points = construirePointsColores(dataCumul, trous, intervallesRegen);
+
+        const options = optionsAxeTemps('hour', 'dd/MM HH:mm', seuil24h * 1000, maintenant * 1000);
 
         if (!chart24h) {
             const ctx = document.getElementById('chart24h').getContext('2d');
-            chart24h = new Chart(ctx, { type: 'line', data: { datasets: [{ label: 'Litres (cumul)', data: points, borderColor: '#64ffda', backgroundColor: 'rgba(100,255,218,0.2)', borderWidth: 2, fill: true, tension: 0.1, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
+            chart24h = new Chart(ctx, {
+                type: 'line',
+                data: { datasets: [{
+                    label: 'Litres (cumul)',
+                    data: points,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    segment: segmentColorCallback(COULEUR_NORMALE_24H)
+                }] },
+                options: options,
+                plugins: [pluginCurseurVertical]
+            });
         } else {
             chart24h.data.datasets[0].data = points;
             chart24h.options = options;
@@ -703,16 +776,38 @@ async function loadGraphiqueSemaineHeure() {
         const res = await fetch("eau_semaine.json?" + Date.now());
         const dataComplete = await res.json();
 
-        const dataAggregee = aggregerParIntervalle(dataComplete, 3600);
-        const data = calculerCumulAvecResetJournalier(dataAggregee);
+        const maintenant = Math.floor(Date.now() / 1000);
+        const seuil7j = maintenant - (7 * 24 * 3600);
 
-        const points = data.map(d => ({ x: d.timestamp * 1000, y: d.cumul }));
+        const dataAggregee = aggregerParIntervalle(dataComplete, 3600)
+            .sort((a,b) => a.timestamp - b.timestamp);
 
-        const options = optionsAxeTemps('day', 'EEE dd/MM HH:mm');
+        const trous = detecterTrous(dataAggregee, 3600);
+        const intervallesRegen = await getIntervallesRegen();
+
+        const dataCumul = calculerCumulAvecResetJournalier(dataAggregee)
+            .sort((a,b) => a.timestamp - b.timestamp);
+
+        const points = construirePointsColores(dataCumul, trous, intervallesRegen);
+
+        const options = optionsAxeTemps('day', 'EEE dd/MM HH:mm', seuil7j * 1000, maintenant * 1000);
 
         if (!chartSemaineHeure) {
             const ctx = document.getElementById('chartSemaineHeure').getContext('2d');
-            chartSemaineHeure = new Chart(ctx, { type: 'line', data: { datasets: [{ label: 'Litres (cumul)', data: points, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.2)', borderWidth: 2, fill: true, tension: 0.1, pointRadius: 0 }] }, options: options, plugins: [pluginCurseurVertical] });
+            chartSemaineHeure = new Chart(ctx, {
+                type: 'line',
+                data: { datasets: [{
+                    label: 'Litres (cumul)',
+                    data: points,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    segment: segmentColorCallback(COULEUR_NORMALE_7J)
+                }] },
+                options: options,
+                plugins: [pluginCurseurVertical]
+            });
         } else {
             chartSemaineHeure.data.datasets[0].data = points;
             chartSemaineHeure.options = options;
