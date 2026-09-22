@@ -754,7 +754,7 @@ async function loadGraphique24h() {
         const dataTrieeComplete = dataComplete.slice().sort((a,b) => a.timestamp - b.timestamp);
 
         const premierTimestamp = dataTrieeComplete.length ? dataTrieeComplete[0].timestamp : maintenant;
-        const maxDecalageHeures = Math.max(0, Math.floor((maintenant - premierTimestamp) / 3600) - 24);
+        const maxDecalageHeures = Math.max(0, Math.floor((maintenant - premierTimestamp) / 3600));
         const slider = document.getElementById('sliderHistorique');
         slider.min = 0;
         slider.max = maxDecalageHeures;
